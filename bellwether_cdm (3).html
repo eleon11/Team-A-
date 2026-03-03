@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Bellwether CDM — Gold + Silver Layer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f0f2f7;overflow:hidden;height:100vh;}
+
+/* TOP BAR */
+#topbar{position:fixed;top:0;left:0;right:0;height:54px;z-index:100;background:#fff;border-bottom:1px solid #e2e6ef;display:flex;align-items:center;gap:12px;padding:0 18px;box-shadow:0 1px 5px rgba(0,0,0,0.07);}
+.brand{font-size:14px;font-weight:700;color:#1a2035;}.brand span{color:#b87c1a;}
+.tagline{font-size:11px;color:#8a95a8;border-left:1px solid #e2e6ef;padding-left:12px;}
+.spacer{flex:1;}
+.fbtn{font-size:11px;padding:5px 12px;border-radius:20px;border:1.5px solid #e2e6ef;background:#fff;color:#5a6478;cursor:pointer;transition:all .15s;font-weight:500;}
+.fbtn:hover{border-color:#b87c1a;color:#b87c1a;}
+.fbtn.active{background:#b87c1a;color:#fff;border-color:#b87c1a;}
+#filters{display:flex;gap:5px;}
+.tpill{font-size:10px;padding:4px 10px;border-radius:20px;border:1px solid #e2e6ef;color:#8a95a8;background:#f0f2f7;white-space:nowrap;}
+.layer-toggle{display:flex;gap:4px;border:1.5px solid #e2e6ef;border-radius:20px;overflow:hidden;}
+.ltbtn{font-size:11px;padding:4px 12px;border:none;background:#fff;color:#5a6478;cursor:pointer;font-weight:500;transition:all .15s;}
+.ltbtn.active{background:#1a2035;color:#fff;}
+
+/* CANVAS */
+#vp{position:fixed;top:54px;left:0;right:0;bottom:0;overflow:hidden;cursor:grab;}
+#vp.pan{cursor:grabbing;}
+#cv{position:absolute;top:0;left:0;transform-origin:0 0;}
+svg#edgesvg{position:absolute;top:0;left:0;overflow:visible;pointer-events:none;}
+
+/* GOLD NODES */
+.node{position:absolute;border-radius:10px;background:#fff;border:2px solid #e2e6ef;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.07);transition:box-shadow .18s,border-color .18s,transform .15s,opacity .22s;user-select:none;}
+.node:hover{box-shadow:0 6px 20px rgba(0,0,0,0.13);transform:translateY(-2px);}
+.node.selected{border-color:#b87c1a!important;box-shadow:0 0 0 3px rgba(184,124,26,0.18),0 6px 20px rgba(0,0,0,0.13)!important;}
+.node.faded{opacity:.08;pointer-events:none;transform:none!important;box-shadow:none!important;}
+.node.hub{border-width:2.5px;}
+.n-head{padding:9px 12px 7px;border-bottom:1px solid #f0f2f7;display:flex;align-items:flex-start;gap:8px;}
+.n-head.collapsed{border-bottom:none;}
+.n-icon{font-size:16px;flex-shrink:0;margin-top:1px;}
+.n-meta{flex:1;min-width:0;}
+.n-domain{font-size:8.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;margin-bottom:2px;}
+.n-label{font-size:11px;font-weight:700;color:#1a2035;line-height:1.3;}
+.n-cols-badge{font-size:8.5px;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap;flex-shrink:0;margin-top:2px;}
+.n-toggle{font-size:11px;color:#94a3b8;cursor:pointer;flex-shrink:0;margin-top:1px;line-height:1;padding:2px 3px;border-radius:4px;transition:color .15s,background .15s;}
+.n-toggle:hover{color:#b87c1a;background:rgba(184,124,26,0.08);}
+.n-fields{overflow:hidden;transition:max-height .25s ease;}
+.n-fields-inner{padding:6px 12px 8px;}
+.n-field{display:flex;align-items:center;gap:6px;padding:2px 0;border-bottom:1px solid #f7f8fa;}
+.n-field:last-child{border-bottom:none;}
+.fkey{font-size:8px;width:14px;text-align:center;flex-shrink:0;}
+.fname{font-size:9.5px;color:#1a2035;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ftype{font-size:8px;color:#94a3b8;white-space:nowrap;}
+.n-more{padding:3px 12px 6px;font-size:8.5px;color:#94a3b8;cursor:pointer;font-style:italic;}
+.n-more:hover{color:#b87c1a;}
+
+/* SILVER NODES */
+.snode{position:absolute;border-radius:8px;background:#fff;border:1.5px solid #e2e6ef;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,0.06);transition:box-shadow .18s,border-color .18s,opacity .22s;user-select:none;display:none;}
+.snode.visible{display:block;}
+.snode:hover{box-shadow:0 4px 14px rgba(0,0,0,0.11);}
+.snode.selected{border-color:#6366f1!important;box-shadow:0 0 0 3px rgba(99,102,241,0.18)!important;}
+.snode.faded{opacity:.07;pointer-events:none;}
+.s-head{padding:7px 10px;display:flex;align-items:center;gap:7px;}
+.s-type-badge{font-size:8px;padding:1px 5px;border-radius:6px;font-weight:700;flex-shrink:0;}
+.s-type-badge.dim{background:#ede9fe;color:#7c3aed;}
+.s-type-badge.fact{background:#dbeafe;color:#1d4ed8;}
+.s-label{font-size:10px;font-weight:700;color:#1a2035;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.s-sys{font-size:8px;color:#94a3b8;white-space:nowrap;}
+.s-gold-feeds{padding:0 10px 7px;display:flex;flex-wrap:wrap;gap:3px;}
+.s-gold-chip{font-size:7.5px;padding:1px 5px;border-radius:6px;background:#fffbf0;color:#b87c1a;border:1px solid #f0d89a;white-space:nowrap;}
+
+/* EDGES */
+.edge{fill:none;stroke-width:1.5;transition:opacity .2s,stroke-width .2s;}
+.edge.faded{opacity:.04;}
+.edge.hi{stroke-width:2.5;opacity:1!important;}
+.sedge{fill:none;stroke-width:1.2;stroke-dasharray:5,3;transition:opacity .2s;display:none;}
+.sedge.visible{display:block;}
+.sedge.faded{opacity:.04;}
+.sedge.hi{stroke-width:2;opacity:1!important;}
+.elbl{font-size:9px;font-weight:600;font-family:'Segoe UI',system-ui,sans-serif;pointer-events:none;}
+
+/* DETAIL PANEL */
+#dp{position:fixed;top:54px;right:0;bottom:0;width:380px;z-index:50;background:#fff;border-left:1px solid #e2e6ef;transform:translateX(100%);transition:transform .25s cubic-bezier(.4,0,.2,1);overflow-y:auto;box-shadow:-4px 0 18px rgba(0,0,0,0.08);}
+#dp.open{transform:translateX(0);}
+.dh{padding:18px 18px 12px;border-bottom:1px solid #f0f2f7;position:sticky;top:0;background:#fff;z-index:1;}
+.dh-icon{font-size:20px;margin-bottom:4px;}
+.dh-domain{font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin-bottom:3px;}
+.dh-title{font-size:14px;font-weight:700;color:#1a2035;line-height:1.3;margin-bottom:2px;}
+.dh-sub{font-size:10px;color:#8a95a8;font-family:monospace;}
+.dclose{position:absolute;top:14px;right:14px;width:26px;height:26px;border-radius:7px;border:1px solid #e2e6ef;background:#f8f9fb;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;color:#7a8599;}
+.dclose:hover{background:#fee2e2;color:#dc2626;border-color:#fecaca;}
+.ds{padding:12px 18px;border-bottom:1px solid #f0f2f7;}
+.ds h4{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#8a95a8;margin-bottom:8px;}
+.d-desc{font-size:12px;color:#374151;line-height:1.65;}
+.d-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.d-stat{background:#f8f9fb;border-radius:8px;padding:8px 10px;}
+.d-stat label{font-size:9px;color:#8a95a8;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:3px;}
+.d-stat .sv{font-size:11.5px;font-weight:700;color:#1a2035;}
+.d-fields{display:flex;flex-direction:column;gap:2px;}
+.d-field{display:flex;align-items:center;gap:8px;padding:4px 8px;border-radius:6px;font-size:11px;}
+.d-field:hover{background:#f8f9fb;}
+.df-badge{font-size:8px;padding:1px 5px;border-radius:8px;font-weight:700;white-space:nowrap;}
+.df-badge.pk{background:#fff8ec;color:#b87c1a;}
+.df-badge.fk{background:#eff6ff;color:#3b82f6;}
+.df-name{flex:1;color:#1a2035;font-weight:500;}
+.df-type{font-size:10px;color:#94a3b8;}
+.rel-item{padding:9px 11px;border-radius:8px;border:1.5px solid #f0f2f7;cursor:pointer;transition:all .15s;background:#fafbfc;margin-bottom:5px;}
+.rel-item:hover{border-color:#b87c1a;background:#fffbf3;}
+.rel-dir{font-size:9px;color:#8a95a8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;}
+.rel-name{font-size:11.5px;font-weight:700;color:#1a2035;margin-bottom:2px;}
+.rel-via{font-size:9.5px;color:#8a95a8;}
+.rel-via strong{color:#5a6478;}
+.src-chips{display:flex;flex-wrap:wrap;gap:4px;}
+.src-chip{font-size:9px;padding:2px 7px;border-radius:10px;background:#f0f2f7;color:#4a5568;font-weight:500;}
+
+/* SILVER lineage in panel */
+.silver-section{padding:12px 18px;border-bottom:1px solid #f0f2f7;}
+.silver-section h4{font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#7c3aed;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
+.silver-section h4::before{content:'';display:inline-block;width:8px;height:8px;border-radius:2px;background:#7c3aed;}
+.stbl-group{margin-bottom:10px;}
+.stbl-name{font-size:10px;font-weight:700;color:#1a2035;margin-bottom:4px;display:flex;align-items:center;gap:5px;}
+.stbl-badge{font-size:7.5px;padding:1px 5px;border-radius:5px;font-weight:700;}
+.stbl-badge.dim{background:#ede9fe;color:#7c3aed;}
+.stbl-badge.fact{background:#dbeafe;color:#1d4ed8;}
+.stbl-sys{font-size:8.5px;color:#94a3b8;margin-left:auto;}
+.stbl-cols{display:flex;flex-direction:column;gap:1px;padding-left:10px;border-left:2px solid #ede9fe;}
+.stbl-col{display:flex;align-items:center;gap:6px;padding:2px 6px;border-radius:4px;font-size:10px;}
+.stbl-col:hover{background:#f5f3ff;}
+.scol-name{flex:1;color:#374151;}
+.scol-arrow{color:#c4b5fd;font-size:9px;}
+.gcol-name{color:#b87c1a;font-weight:600;}
+.transform-badge{font-size:7.5px;padding:1px 5px;border-radius:8px;background:#f0f9ff;color:#0369a1;white-space:nowrap;border:1px solid #bae6fd;}
+
+/* ZOOM & LEGEND */
+#zc{position:fixed;bottom:20px;right:20px;z-index:60;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.zb{width:30px;height:30px;border-radius:8px;border:1px solid #e2e6ef;background:#fff;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:#5a6478;box-shadow:0 2px 6px rgba(0,0,0,0.08);}
+.zb:hover{border-color:#b87c1a;color:#b87c1a;}
+#zlbl{font-size:10px;color:#8a95a8;}
+#leg{position:fixed;bottom:20px;left:20px;z-index:60;background:#fff;border:1px solid #e2e6ef;border-radius:10px;padding:10px 13px;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+#leg h5{font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#8a95a8;margin-bottom:6px;}
+.lr{display:flex;align-items:center;gap:6px;font-size:10px;color:#374151;margin-bottom:4px;font-weight:500;}
+.ld{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+.ll{width:20px;height:2.5px;border-radius:2px;flex-shrink:0;}
+.lsep{border-top:1px solid #f0f2f7;margin:6px 0;}
+#tip{position:fixed;z-index:300;pointer-events:none;background:#1a2035;color:#fff;border-radius:6px;padding:5px 10px;font-size:10px;opacity:0;transition:opacity .12s;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.2);}
+#tip.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="brand">Bellwether</div>
+  <div class="tagline">Gold + Silver Layer · Lineage Map</div>
+  <div class="spacer"></div>
+  <div class="layer-toggle">
+    <button class="ltbtn active" id="lt-gold" onclick="setLayer('gold',this)">Gold Only</button>
+    <button class="ltbtn" id="lt-both" onclick="setLayer('both',this)">+ Silver Layer</button>
+  </div>
+  <div style="width:1px;height:24px;background:#e2e6ef;margin:0 2px"></div>
+  <div id="filters">
+    <button class="fbtn active" onclick="setFilter('all',this)">All</button>
+    <button class="fbtn" onclick="setFilter('debt',this)">Debt</button>
+    <button class="fbtn" onclick="setFilter('equity',this)">Equity</button>
+    <button class="fbtn" onclick="setFilter('reporting',this)">Reporting</button>
+  </div>
+  <div style="width:1px;height:24px;background:#e2e6ef;margin:0 2px"></div>
+  <button class="fbtn" onclick="collapseAll()">Collapse All</button>
+  <button class="fbtn" onclick="expandAll()">Expand All</button>
+  <div class="tpill">27 Gold · 26 Silver · Click any tile</div>
+</div>
+
+<div id="vp"><div id="cv"><svg id="edgesvg" width="5000" height="3500"></svg></div></div>
+
+<div id="dp">
+  <div class="dh">
+    <div class="dh-icon" id="dh-icon"></div>
+    <div class="dh-domain" id="dh-domain"></div>
+    <div class="dh-title" id="dh-title"></div>
+    <div class="dh-sub" id="dh-sub"></div>
+    <div class="dclose" onclick="closeDP()">✕</div>
+  </div>
+  <div class="ds"><h4>What this contains</h4><div class="d-desc" id="d-desc"></div></div>
+  <div class="ds"><h4>At a glance</h4><div class="d-grid" id="d-stats"></div></div>
+  <div class="silver-section" id="silver-lineage-section">
+    <h4>Silver Sources</h4>
+    <div id="d-silver"></div>
+  </div>
+  <div class="ds"><h4>Fields</h4><div class="d-fields" id="d-fields"></div></div>
+  <div class="ds"><h4>Source Systems</h4><div class="src-chips" id="d-sources"></div></div>
+  <div class="ds"><h4>Connected to (Gold)</h4><div id="d-rels"></div></div>
+</div>
+
+<div id="zc">
+  <button class="zb" onclick="zoomBy(1.18)">+</button>
+  <div id="zlbl">100%</div>
+  <button class="zb" onclick="zoomBy(0.85)">−</button>
+  <button class="zb" onclick="resetView()">⌂</button>
+</div>
+<div id="leg">
+  <h5>Gold Domain</h5>
+  <div class="lr"><div class="ld" style="background:#b87c1a"></div>Core Hub</div>
+  <div class="lr"><div class="ld" style="background:#3b82f6"></div>Debt</div>
+  <div class="lr"><div class="ld" style="background:#10b981"></div>Equity</div>
+  <div class="lr"><div class="ld" style="background:#8b5cf6"></div>Reporting/ETL</div>
+  <div class="lsep"></div>
+  <h5 style="margin-bottom:6px">Silver Layer</h5>
+  <div class="lr"><div class="ld" style="background:#7c3aed"></div>Dimension table</div>
+  <div class="lr"><div class="ld" style="background:#3b82f6;opacity:.7"></div>Fact table</div>
+  <div class="lsep"></div>
+  <h5 style="margin-bottom:6px">Edge colour</h5>
+  <div class="lr"><div class="ll" style="background:#94a3b8"></div>invest / loan</div>
+  <div class="lr"><div class="ll" style="background:#10b981"></div>property</div>
+  <div class="lr"><div class="ll" style="background:#b87c1a"></div>fund</div>
+  <div class="lr"><div class="ll" style="background:#7c3aed;opacity:.6;stroke-dasharray:4,3"></div>silver→gold</div>
+</div>
+<div id="tip"></div>
+
+<script>
+// ─── DOMAIN CONFIG ────────────────────────────
+const DOM={
+  hub: {color:'#b87c1a',bg:'#fffbf0',border:'#d4a030',icon:'⬡',tc:'#7c5412',label:'Core Hub'},
+  debt:{color:'#3b82f6',bg:'#eff6ff',border:'#93c5fd',icon:'◈',tc:'#1d4ed8',label:'Debt'},
+  eq:  {color:'#10b981',bg:'#ecfdf5',border:'#6ee7b7',icon:'◇',tc:'#065f46',label:'Equity'},
+  rep: {color:'#8b5cf6',bg:'#f5f3ff',border:'#c4b5fd',icon:'▫',tc:'#5b21b6',label:'Reporting'},
+  etl: {color:'#94a3b8',bg:'#f8fafc',border:'#cbd5e1',icon:'▸',tc:'#475569',label:'ETL'},
+};
+
+// ─── GOLD TABLES ─────────────────────────────
+const TABLES={
+  gold_investment_current_state:{dom:'hub',short:'Investment\nCurrent State',desc:'The central record of every investment — loans, equity, and securities — in one unified, up-to-date view.',usedFor:'Portfolio reporting, AM dashboards, investor letters',refresh:'Daily',etlPattern:'Latest Snapshot + Dim Denormalization',sources:['REDF','REDF/SF','REDF/AM','Salesforce','Bloomberg','Yardi'],cols:[{n:'investment_id',t:'STRING',k:'PK'},{n:'investment_name',t:'STRING',k:''},{n:'fund_id',t:'STRING',k:'FK'},{n:'fund_name',t:'STRING',k:''},{n:'investment_type',t:'STRING',k:''},{n:'asset_class',t:'STRING',k:''},{n:'property_id',t:'STRING',k:'FK'},{n:'property_name',t:'STRING',k:''},{n:'total_commitment',t:'DECIMAL',k:''},{n:'current_balance',t:'DECIMAL',k:''},{n:'market_value',t:'DECIMAL',k:''},{n:'current_rating',t:'INT',k:''},{n:'investment_status',t:'STRING',k:''},{n:'snapshot_date',t:'DATE',k:'NOT NULL'}]},
+  gold_loan_current_state:{dom:'hub',short:'Loan\nCurrent State',desc:'Primary record for every CRE loan. Holds current balances, credit metrics (LTV, DSCR), rate structure, and AM status.',usedFor:'AM dashboards, board reports, investor letters',refresh:'Daily',etlPattern:'Latest Snapshot',sources:['REDF','REDF/Trepp','REDF/AM','MAI Appraisal','Manual/AM','Salesforce','Yardi'],cols:[{n:'loan_id',t:'STRING',k:'PK'},{n:'fund_id',t:'STRING',k:'FK'},{n:'fund_name',t:'STRING',k:''},{n:'loan_type',t:'STRING',k:''},{n:'total_commitment',t:'DECIMAL',k:''},{n:'current_balance',t:'DECIMAL',k:''},{n:'all_in_rate',t:'DECIMAL',k:''},{n:'current_ltv',t:'DECIMAL',k:''},{n:'current_dscr',t:'DECIMAL',k:''},{n:'current_rating',t:'INT',k:''},{n:'is_watchlist',t:'BOOLEAN',k:''},{n:'loan_status',t:'STRING',k:''},{n:'reporting_date',t:'DATE',k:'NOT NULL'}]},
+  gold_flash_report:{dom:'debt',short:'Flash Report',desc:'One-page summary per investment per reporting period — key financials with narrative sections.',usedFor:'Monthly AM report generation',refresh:'Monthly',etlPattern:'Pivot + Latest Snapshot',sources:['REDF','Manual/AM','Salesforce','Yardi'],cols:[{n:'investment_id',t:'STRING',k:'PK'},{n:'report_date',t:'DATE',k:'PK'},{n:'current_balance',t:'DECIMAL',k:''},{n:'current_rating',t:'INT',k:''},{n:'executive_summary',t:'STRING',k:''},{n:'key_developments',t:'STRING',k:''},{n:'risk_factors',t:'STRING',k:''},{n:'outlook',t:'STRING',k:''},{n:'occupancy_pct',t:'DECIMAL',k:''},{n:'noi',t:'DECIMAL',k:''},{n:'dscr',t:'DECIMAL',k:''},{n:'current_ltv',t:'DECIMAL',k:''}]},
+  gold_capital_stack:{dom:'debt',short:'Capital Stack',desc:'Full debt structure by tranche — A/B note splits, lender positions, LTV by tranche and cumulative.',usedFor:'Credit committee review, risk concentration analysis',refresh:'Daily',etlPattern:'Latest Snapshot + Dim Joins',sources:['REDF/Trepp'],cols:[{n:'investment_id',t:'STRING',k:'PK'},{n:'tranche_id',t:'STRING',k:'PK'},{n:'tranche_name',t:'STRING',k:''},{n:'tranche_type',t:'STRING',k:''},{n:'total_commitment',t:'DECIMAL',k:''},{n:'current_balance',t:'DECIMAL',k:''},{n:'a_note_balance',t:'DECIMAL',k:''},{n:'b_note_balance',t:'DECIMAL',k:''},{n:'tranche_ltv',t:'DECIMAL',k:''},{n:'cumulative_ltv',t:'DECIMAL',k:''}]},
+  gold_loan_history:{dom:'debt',short:'Loan History',desc:'Complete historical record of every loan snapshot — all rows retained. Enables trend analysis and rating migration tracking.',usedFor:'Trend analysis, rating migration, regulatory look-backs',refresh:'Daily (append)',etlPattern:'Full History + Dim Joins',sources:['REDF'],cols:[{n:'loan_id',t:'STRING',k:'PK'},{n:'snapshot_date',t:'DATE',k:'PK'},{n:'current_balance',t:'DECIMAL',k:''},{n:'current_ltv',t:'DECIMAL',k:''},{n:'current_dscr',t:'DECIMAL',k:''},{n:'current_rating',t:'INT',k:''},{n:'is_watchlist',t:'BOOLEAN',k:''},{n:'loan_status',t:'STRING',k:''}]},
+  gold_payoff_history:{dom:'debt',short:'Payoff History',desc:'Every realized loan exit event with full return metrics — IRR, MOC, gain/loss, hold period.',usedFor:'Realized return reporting, vintage analysis',refresh:'Daily',etlPattern:'Full History (no dedup) + Dim Joins',sources:['REDF'],cols:[{n:'payoff_id',t:'STRING',k:'PK'},{n:'loan_id',t:'STRING',k:'FK'},{n:'payoff_date',t:'DATE',k:''},{n:'payoff_amount',t:'DECIMAL',k:''},{n:'realized_irr',t:'DECIMAL',k:''},{n:'realized_moc',t:'DECIMAL',k:''},{n:'gain_loss',t:'DECIMAL',k:''},{n:'hold_period_months',t:'INT',k:''}]},
+  gold_risk_exposure:{dom:'debt',short:'Risk & Watchlist',desc:'Consolidated credit risk view per investment — rating changes, watchlist status, delinquency, and resolution strategy.',usedFor:'Risk committee reporting, workout monitoring',refresh:'Daily',etlPattern:'Latest Snapshot + Conditional Fields',sources:['REDF','REDF/AM'],cols:[{n:'investment_id',t:'STRING',k:'PK'},{n:'current_rating',t:'INT',k:''},{n:'prior_rating',t:'INT',k:''},{n:'is_watchlist',t:'BOOLEAN',k:''},{n:'delinquency_status',t:'STRING',k:''},{n:'days_delinquent',t:'INT',k:''},{n:'resolution_strategy',t:'STRING',k:''},{n:'current_ltv',t:'DECIMAL',k:''},{n:'current_dscr',t:'DECIMAL',k:''}]},
+  gold_covenant_abstract:{dom:'debt',short:'Covenant Tracking',desc:'Covenant compliance tracking — actual vs. threshold values, compliance flag, waiver history, and next test dates.',usedFor:'Legal monitoring, early warning for covenant breaches',refresh:'Monthly',etlPattern:'Latest Test per Covenant',sources:['REDF/Legal'],cols:[{n:'covenant_id',t:'STRING',k:'PK'},{n:'investment_id',t:'STRING',k:'FK'},{n:'covenant_name',t:'STRING',k:''},{n:'test_date',t:'DATE',k:''},{n:'threshold_value',t:'DECIMAL',k:''},{n:'actual_value',t:'DECIMAL',k:''},{n:'is_compliant',t:'BOOLEAN',k:''},{n:'is_waived',t:'BOOLEAN',k:''}]},
+  gold_reserve_balances:{dom:'debt',short:'Reserve Balances',desc:'Reserve account balance tracking by type — required vs. actual balances, shortfall, and compliance status.',usedFor:'Lender reporting, cash management',refresh:'Monthly',etlPattern:'Latest Snapshot per Reserve',sources:['REDF/Banking'],cols:[{n:'reserve_id',t:'STRING',k:'PK'},{n:'investment_id',t:'STRING',k:'FK'},{n:'reserve_type',t:'STRING',k:''},{n:'required_balance',t:'DECIMAL',k:''},{n:'current_balance',t:'DECIMAL',k:''},{n:'shortfall',t:'DECIMAL',k:''},{n:'is_compliant',t:'BOOLEAN',k:''}]},
+  gold_rate_reset_schedule:{dom:'debt',short:'Rate Reset Schedule',desc:'Full schedule of interest rate reset periods for floating-rate loans.',usedFor:'Interest rate risk monitoring, hedging strategy',refresh:'Daily',etlPattern:'Full History Rate Periods',sources:['REDF'],cols:[{n:'schedule_id',t:'STRING',k:'PK'},{n:'loan_id',t:'STRING',k:'FK'},{n:'period_start_date',t:'DATE',k:''},{n:'period_end_date',t:'DATE',k:''},{n:'benchmark_index',t:'STRING',k:''},{n:'spread',t:'DECIMAL',k:''},{n:'all_in_rate',t:'DECIMAL',k:''},{n:'is_io_period',t:'BOOLEAN',k:''}]},
+  gold_rate_cap_inventory:{dom:'debt',short:'Rate Cap Inventory',desc:'All interest rate caps held — counterparty, notional, strike rate, MTM value, in-the-money flag.',usedFor:'Hedging policy compliance, unprotected exposure identification',refresh:'Daily',etlPattern:'Latest Snapshot + Dim Joins',sources:['Bloomberg/Counterparty'],cols:[{n:'rate_cap_id',t:'STRING',k:'PK'},{n:'investment_id',t:'STRING',k:'FK'},{n:'notional_amount',t:'DECIMAL',k:''},{n:'strike_rate',t:'DECIMAL',k:''},{n:'current_market_value',t:'DECIMAL',k:''},{n:'is_in_the_money',t:'BOOLEAN',k:''},{n:'months_to_expiry',t:'INT',k:''}]},
+  gold_debt_facilities:{dom:'debt',short:'Debt Facilities',desc:'Fund-level credit facility utilization — warehouse lines, repo facilities, CLO capacity.',usedFor:'Fund leverage management',refresh:'Daily',etlPattern:'Latest Snapshot + Dim Joins',sources:['Bloomberg/Internal'],cols:[{n:'facility_id',t:'STRING',k:'PK'},{n:'fund_id',t:'STRING',k:'FK'},{n:'facility_name',t:'STRING',k:''},{n:'facility_limit',t:'DECIMAL',k:''},{n:'drawn_amount',t:'DECIMAL',k:''},{n:'available_capacity',t:'DECIMAL',k:''},{n:'compliance_status',t:'STRING',k:''}]},
+  gold_maturity_schedule:{dom:'debt',short:'Maturity Schedule',desc:'Forward-looking maturity calendar with months-to-maturity, year/quarter bucketing, extension options.',usedFor:'Liquidity planning, risk committee reporting',refresh:'Daily',etlPattern:'Latest Snapshot + Date Arithmetic',sources:['REDF','REDF/AM','Yardi'],cols:[{n:'investment_id',t:'STRING',k:'PK'},{n:'current_balance',t:'DECIMAL',k:''},{n:'current_maturity_date',t:'DATE',k:''},{n:'months_to_maturity',t:'DECIMAL',k:''},{n:'maturity_year',t:'INT',k:''},{n:'maturity_quarter',t:'STRING',k:''},{n:'current_rating',t:'INT',k:''}]},
+  gold_equity_investment:{dom:'eq',short:'Equity Investment',desc:'JV equity investment performance — UW vs reforecast vs current IRR, equity multiples, NAV, and appraised value.',usedFor:'Equity AM reporting, LP capital account tracking',refresh:'Monthly',etlPattern:'Latest Snapshot + Dim Joins',sources:['Yardi/Internal'],cols:[{n:'investment_id',t:'STRING',k:'PK'},{n:'ownership_pct',t:'DECIMAL',k:''},{n:'total_equity_committed',t:'DECIMAL',k:''},{n:'uw_irr',t:'DECIMAL',k:''},{n:'rf_irr',t:'DECIMAL',k:''},{n:'current_irr',t:'DECIMAL',k:''},{n:'current_nav',t:'DECIMAL',k:''},{n:'current_appraised_value',t:'DECIMAL',k:''}]},
+  gold_waterfall_summary:{dom:'eq',short:'Waterfall Summary',desc:'Waterfall distribution by participant — LP/GP capital accounts, preferred return, cumulative distributions.',usedFor:'Fund administration, LP capital account reconciliation',refresh:'Monthly',etlPattern:'Latest Distribution + Projection Join',sources:['Internal/Legal'],cols:[{n:'waterfall_id',t:'STRING',k:'PK'},{n:'investment_id',t:'STRING',k:'FK'},{n:'participant_name',t:'STRING',k:''},{n:'preferred_return_pct',t:'DECIMAL',k:''},{n:'cumulative_distributions',t:'DECIMAL',k:''},{n:'irr_to_date',t:'DECIMAL',k:''},{n:'projected_irr',t:'DECIMAL',k:''}]},
+  gold_portfolio_summary:{dom:'eq',short:'Portfolio Summary',desc:'Fund-level executive summary — weighted-average spread, LTV, DSCR, cap rates, and rating distribution.',usedFor:'Board reporting, investor letters, fund performance summaries',refresh:'Monthly',etlPattern:'Aggregation + Weighted Average',sources:['REDF','Yardi'],cols:[{n:'fund_id',t:'STRING',k:'PK'},{n:'reporting_date',t:'DATE',k:'PK'},{n:'total_investments',t:'INT',k:''},{n:'total_commitment',t:'DECIMAL',k:''},{n:'wtd_avg_spread',t:'DECIMAL',k:''},{n:'wtd_avg_ltv',t:'DECIMAL',k:''},{n:'wtd_avg_dscr',t:'DECIMAL',k:''},{n:'watchlist_count',t:'INT',k:''}]},
+  gold_underwriting_comparison:{dom:'eq',short:'Underwriting Comparison',desc:'Actual vs. underwritten comparison — IRR variance, equity multiple variance, NOI variance.',usedFor:'Investment committee review, PM scorecards',refresh:'Monthly',etlPattern:'Latest Snapshot + UW Variance Calculations',sources:['Internal/Argus'],cols:[{n:'investment_id',t:'STRING',k:'PK'},{n:'uw_irr',t:'DECIMAL',k:''},{n:'rf_irr',t:'DECIMAL',k:''},{n:'irr_variance',t:'DECIMAL',k:''},{n:'uw_noi',t:'DECIMAL',k:''},{n:'current_noi',t:'DECIMAL',k:''},{n:'noi_variance',t:'DECIMAL',k:''}]},
+  gold_bbpt_summary:{dom:'eq',short:'Business Plan Tracker',desc:'Construction and business plan KPIs — hard cost completion, funded-to-date, NOI variance vs. budget and UW.',usedFor:'Construction monitoring, business plan performance',refresh:'Daily',etlPattern:'MERGE + CASE WHEN Year Routing + Arithmetic',sources:['Salesforce','REDF/SF','Yardi'],cols:[{n:'bbpt_id',t:'STRING',k:'PK'},{n:'investment_id',t:'STRING',k:'FK'},{n:'pct_complete_hard_costs',t:'DECIMAL',k:''},{n:'current_budget',t:'DECIMAL',k:''},{n:'gross_funded_to_date',t:'DECIMAL',k:''},{n:'noi_actual_current_yr',t:'DECIMAL',k:''},{n:'noi_variance_vs_budget',t:'DECIMAL',k:''}]},
+  gold_operating_performance:{dom:'eq',short:'Operating Performance',desc:'Property P&L from gross potential rent through net cash flow — actual vs. UW vs. budget NOI variance.',usedFor:'Property performance review meetings',refresh:'Monthly',etlPattern:'Direct Passthrough + Dim Joins',sources:['Yardi/AppFolio'],cols:[{n:'property_id',t:'STRING',k:'PK'},{n:'period_end_date',t:'DATE',k:'PK'},{n:'gross_potential_rent',t:'DECIMAL',k:''},{n:'noi',t:'DECIMAL',k:''},{n:'dscr',t:'DECIMAL',k:''},{n:'occupancy_pct',t:'DECIMAL',k:''},{n:'noi_variance_to_budget',t:'DECIMAL',k:''}]},
+  gold_rent_roll_summary:{dom:'eq',short:'Rent Roll Summary',desc:'Property-level rent roll — unit counts, occupancy, base/market rent, loss-to-lease, concessions.',usedFor:'Leasing performance reporting',refresh:'Monthly',etlPattern:'Aggregation from unit-level rent roll',sources:['Yardi/Entrata'],cols:[{n:'property_id',t:'STRING',k:'PK'},{n:'total_units',t:'INT',k:''},{n:'occupancy_pct',t:'DECIMAL',k:''},{n:'total_base_rent',t:'DECIMAL',k:''},{n:'loss_to_lease_amt',t:'DECIMAL',k:''},{n:'expiring_within_90_days',t:'INT',k:''}]},
+  gold_lease_expiration_schedule:{dom:'eq',short:'Lease Expiration Schedule',desc:'Forward lease expiration schedule by year — expiring SF, in-place vs. market rent PSF, mark-to-market opportunity.',usedFor:'Leasing strategy, investor reporting on lease duration',refresh:'Monthly',etlPattern:'Full History + Dim Joins',sources:['Yardi/Argus'],cols:[{n:'property_id',t:'STRING',k:'PK'},{n:'expiration_year',t:'INT',k:'PK'},{n:'expiring_sf',t:'DECIMAL',k:''},{n:'expiring_rent_psf',t:'DECIMAL',k:''},{n:'market_rent_psf',t:'DECIMAL',k:''},{n:'mark_to_market_pct',t:'DECIMAL',k:''}]},
+  gold_financial_performance:{dom:'eq',short:'Financial Performance',desc:'GL-sourced financials — revenue, expenses, NOI, budget vs. UW vs. prior year variance metrics.',usedFor:'Fund financial consolidation, variance analysis',refresh:'Monthly',etlPattern:'GL-Level Aggregation + Budget Comparison',sources:['Yardi/AppFolio/MRI'],cols:[{n:'property_id',t:'STRING',k:'PK'},{n:'total_revenue',t:'DECIMAL',k:''},{n:'total_operating_expenses',t:'DECIMAL',k:''},{n:'noi',t:'DECIMAL',k:''},{n:'budget_noi',t:'DECIMAL',k:''},{n:'noi_variance_to_budget',t:'DECIMAL',k:''}]},
+  gold_commentary_history:{dom:'rep',short:'Commentary History',desc:'Full archive of all investment narrative commentary — type, section, author, review/approval status, version.',usedFor:'Audit trail, SEC/regulatory record-keeping',refresh:'Monthly',etlPattern:'Full History + Dedup by Version',sources:['Manual/AM'],cols:[{n:'commentary_id',t:'STRING',k:'PK'},{n:'investment_id',t:'STRING',k:'FK'},{n:'commentary_type',t:'STRING',k:''},{n:'commentary_text',t:'STRING',k:''},{n:'review_status',t:'STRING',k:''},{n:'version_number',t:'INT',k:''},{n:'is_current_version',t:'BOOLEAN',k:''}]},
+  gold_loan_activity:{dom:'rep',short:'Loan Activity Log',desc:'Unified loan activity log — draws, payments, modifications, payoffs stacked via UNION ALL into a single event stream.',usedFor:'Activity-based reporting, balance reconciliation',refresh:'Daily',etlPattern:'UNION ALL Event Consolidation',sources:['REDF'],cols:[{n:'activity_id',t:'STRING',k:'PK'},{n:'loan_id',t:'STRING',k:'FK'},{n:'activity_date',t:'DATE',k:'NOT NULL'},{n:'activity_type',t:'STRING',k:'NOT NULL'},{n:'amount',t:'DECIMAL',k:''},{n:'balance_after',t:'DECIMAL',k:''}]},
+  gold_security_portfolio:{dom:'rep',short:'Security Portfolio',desc:'CMBS, RMBS, and CLO positions — market value, cost basis, unrealized gain/loss, multi-agency ratings.',usedFor:'Investment accounting, regulatory capital reporting',refresh:'Daily',etlPattern:'Latest Snapshot + CM Rating Dim',sources:['Bloomberg/Intex'],cols:[{n:'security_id',t:'STRING',k:'PK'},{n:'cusip',t:'STRING',k:''},{n:'security_type',t:'STRING',k:''},{n:'market_value',t:'DECIMAL',k:''},{n:'cost_basis',t:'DECIMAL',k:''},{n:'unrealized_gain_loss',t:'DECIMAL',k:''},{n:'rating_moodys',t:'STRING',k:''}]},
+  gold_current_state_build:{dom:'etl',short:'Current State Lineage',desc:'ETL provenance metadata for each gold_investment_current_state build.',usedFor:'Data governance, lineage auditing',refresh:'Daily (replaced)',etlPattern:'ETL Staging — Provenance Tracking',sources:['ETL System'],cols:[{n:'investment_id',t:'STRING',k:'PK'},{n:'source_table',t:'STRING',k:''},{n:'fields_populated',t:'INT',k:''},{n:'build_timestamp',t:'TIMESTAMP',k:''}]},
+  gold_flash_report_build:{dom:'etl',short:'Flash Report Lineage',desc:'ETL provenance metadata for each gold_flash_report build.',usedFor:'Editorial review, report audit',refresh:'Monthly (replaced)',etlPattern:'ETL Staging — Provenance Tracking',sources:['ETL System'],cols:[{n:'investment_id',t:'STRING',k:'PK'},{n:'report_date',t:'DATE',k:'PK'},{n:'data_completeness_pct',t:'DECIMAL',k:''},{n:'build_timestamp',t:'TIMESTAMP',k:''}]},
+};
+
+// ─── SILVER TABLES ────────────────────────────
+const SILVER={
+  dim_fund:{type:'dim',sys:'REDF',label:'dim_fund',feeds:['gold_investment_current_state','gold_loan_current_state','gold_flash_report','gold_loan_history','gold_risk_exposure','gold_portfolio_summary','gold_maturity_schedule','gold_commentary_history','gold_loan_activity','gold_payoff_history','gold_capital_stack','gold_rate_reset_schedule','gold_covenant_abstract','gold_equity_investment','gold_waterfall_summary','gold_bbpt_summary','gold_operating_performance','gold_rent_roll_summary','gold_financial_performance','gold_lease_expiration_schedule','gold_security_portfolio','gold_underwriting_comparison']},
+  dim_property:{type:'dim',sys:'Yardi',label:'dim_property',feeds:['gold_investment_current_state','gold_loan_current_state','gold_flash_report','gold_capital_stack','gold_payoff_history','gold_maturity_schedule','gold_bbpt_summary','gold_operating_performance','gold_rent_roll_summary','gold_financial_performance','gold_lease_expiration_schedule','gold_equity_investment']},
+  dim_sponsor:{type:'dim',sys:'Salesforce',label:'dim_sponsor',feeds:['gold_investment_current_state','gold_loan_current_state','gold_flash_report','gold_equity_investment']},
+  dim_lender:{type:'dim',sys:'REDF',label:'dim_lender',feeds:['gold_loan_current_state','gold_debt_facilities']},
+  dim_loan_type:{type:'dim',sys:'REDF',label:'dim_loan_type',feeds:['gold_loan_current_state']},
+  dim_waterfall_structure:{type:'dim',sys:'Internal/Legal',label:'dim_waterfall_structure',feeds:['gold_waterfall_summary','gold_underwriting_comparison']},
+  fact_investment_position:{type:'fact',sys:'REDF/SF',label:'fact_investment_position',feeds:['gold_investment_current_state','gold_flash_report','gold_maturity_schedule','gold_risk_exposure','gold_loan_activity','gold_commentary_history','gold_bbpt_summary','gold_rate_reset_schedule','gold_covenant_abstract','gold_underwriting_comparison','gold_loan_history']},
+  fact_loan_snapshot:{type:'fact',sys:'REDF/Trepp',label:'fact_loan_snapshot',feeds:['gold_loan_current_state','gold_flash_report','gold_loan_history','gold_risk_exposure','gold_portfolio_summary','gold_maturity_schedule','gold_rate_reset_schedule']},
+  fact_operating_performance:{type:'fact',sys:'Yardi',label:'fact_operating_performance',feeds:['gold_loan_current_state','gold_flash_report','gold_loan_history','gold_operating_performance','gold_portfolio_summary']},
+  fact_valuation:{type:'fact',sys:'MAI Appraisal',label:'fact_valuation',feeds:['gold_loan_current_state','gold_loan_history']},
+  fact_flash_narrative:{type:'fact',sys:'Manual/AM',label:'fact_flash_narrative',feeds:['gold_flash_report','gold_flash_report_build']},
+  fact_capital_stack:{type:'fact',sys:'REDF/Trepp',label:'fact_capital_stack',feeds:['gold_capital_stack']},
+  fact_payoff:{type:'fact',sys:'REDF',label:'fact_payoff',feeds:['gold_payoff_history']},
+  fact_covenant_tracking:{type:'fact',sys:'REDF/Legal',label:'fact_covenant_tracking',feeds:['gold_covenant_abstract']},
+  fact_reserve_balance:{type:'fact',sys:'REDF/Banking',label:'fact_reserve_balance',feeds:['gold_reserve_balances']},
+  fact_rate_schedule:{type:'fact',sys:'REDF',label:'fact_rate_schedule',feeds:['gold_rate_reset_schedule']},
+  fact_rate_cap:{type:'fact',sys:'Bloomberg/Counterparty',label:'fact_rate_cap',feeds:['gold_rate_cap_inventory']},
+  fact_debt_facility:{type:'fact',sys:'Bloomberg/Internal',label:'fact_debt_facility',feeds:['gold_debt_facilities']},
+  fact_equity_snapshot:{type:'fact',sys:'Yardi/Internal',label:'fact_equity_snapshot',feeds:['gold_equity_investment','gold_underwriting_comparison']},
+  fact_waterfall_distribution:{type:'fact',sys:'Internal/Legal',label:'fact_waterfall_distribution',feeds:['gold_waterfall_summary']},
+  fact_waterfall_participant:{type:'fact',sys:'Internal/Legal',label:'fact_waterfall_participant',feeds:['gold_waterfall_summary']},
+  fact_waterfall_projection:{type:'fact',sys:'Internal/Legal',label:'fact_waterfall_projection',feeds:['gold_waterfall_summary']},
+  fact_bbpt_tracker:{type:'fact',sys:'Salesforce',label:'fact_bbpt_tracker',feeds:['gold_bbpt_summary']},
+  fact_rent_roll:{type:'fact',sys:'Yardi/Entrata',label:'fact_rent_roll',feeds:['gold_rent_roll_summary']},
+  fact_financial_statement:{type:'fact',sys:'Yardi/AppFolio/MRI',label:'fact_financial_statement',feeds:['gold_financial_performance']},
+  fact_lease_expiration:{type:'fact',sys:'Yardi/Argus',label:'fact_lease_expiration',feeds:['gold_lease_expiration_schedule']},
+  fact_commentary:{type:'fact',sys:'Manual/AM',label:'fact_commentary',feeds:['gold_commentary_history']},
+  fact_security_position:{type:'fact',sys:'Bloomberg/Intex',label:'fact_security_position',feeds:['gold_security_portfolio']},
+};
+
+  // Silver → Gold column-level lineage (key mappings per gold table)
+const S2G_LINEAGE={
+  gold_investment_current_state:[
+    {silver:'fact_investment_position',cols:[['Investment ID','Investment ID','Direct Copy'],['Investment Name','Investment Name','Direct Copy'],['Fund ID','Fund ID','Direct Copy'],['Current Balance','Current Balance','Direct Copy'],['Market Value','Market Value','Direct Copy'],['Current Rating','Current Rating','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join'],['Property Type','Property Type','Denorm Join']]},
+    {silver:'dim_sponsor',cols:[['Sponsor Name','Sponsor Name','Denorm Join']]},
+  ],
+  gold_loan_current_state:[
+    {silver:'fact_loan_snapshot',cols:[['Loan ID','Loan ID','Direct Copy'],['Fund ID','Fund ID','Direct Copy'],['Current Balance','Current Balance','Direct Copy'],['All In Rate','All In Rate','Direct Copy'],['Current LTV','Current LTV','Direct Copy'],['Current DSCR','Current DSCR','Direct Copy'],['Current Rating','Current Rating','Direct Copy'],['Is Watchlist','Is Watchlist','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join']]},
+    {silver:'fact_operating_performance',cols:[['Occupancy %','Occupancy %','COALESCE+Latest'],['NOI','NOI','COALESCE+Latest']]},
+    {silver:'fact_valuation',cols:[['Appraised Value','Appraised Value','COALESCE+Latest']]},
+    {silver:'dim_lender',cols:[['Lender Name','Senior Lender','Denorm Join']]},
+  ],
+  gold_flash_report:[
+    {silver:'fact_flash_narrative',cols:[['Narrative Text','Executive Summary','PIVOT MAX CASE'],['Narrative Text','Key Developments','PIVOT MAX CASE'],['Narrative Text','Risk Factors','PIVOT MAX CASE'],['Narrative Text','Outlook','PIVOT MAX CASE']]},
+    {silver:'fact_loan_snapshot',cols:[['Current Balance','Current Balance','Direct Copy'],['Current Rating','Current Rating','Direct Copy'],['Current LTV','Current LTV','Direct Copy'],['Current DSCR','Current DSCR','Direct Copy']]},
+    {silver:'fact_investment_position',cols:[['Investment Name','Investment Name','Direct Copy'],['Investment Type','Investment Type','Direct Copy']]},
+    {silver:'fact_operating_performance',cols:[['Occupancy %','Occupancy %','Latest Subquery'],['NOI','NOI','Latest Subquery']]},
+  ],
+  gold_portfolio_summary:[
+    {silver:'fact_loan_snapshot',cols:[['Current Balance','Total Current Balance','Aggregation'],['Spread','Wtd. Avg. Spread','Weighted Avg'],['Current LTV','Wtd. Avg. LTV','Weighted Avg'],['Current DSCR','Wtd. Avg. DSCR','Weighted Avg'],['Current Rating','Rating 1 Count','Conditional Agg']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'fact_operating_performance',cols:[['NOI','Total NOI','Aggregation'],['Occupancy %','Wtd. Avg. Occupancy','Aggregation']]},
+  ],
+  gold_loan_activity:[
+    {silver:'fact_loan_snapshot',cols:[['Loan ID','Loan ID','UNION ALL']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join Post-UNION']]},
+    {silver:'fact_investment_position',cols:[['Investment Name','Investment Name','Denorm Join']]},
+  ],
+  gold_maturity_schedule:[
+    {silver:'fact_investment_position',cols:[['Investment ID','Investment ID','Direct Copy'],['Current Balance','Current Balance','Direct Copy'],['Current Maturity Date','Current Maturity Date','Direct Copy'],['Current Rating','Current Rating','Direct Copy']]},
+    {silver:'fact_loan_snapshot',cols:[['Final Maturity Date','Final Maturity Date','Direct Copy'],['Extension Options','Extension Options','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join']]},
+  ],
+  gold_bbpt_summary:[
+    {silver:'fact_bbpt_tracker',cols:[['BBPT ID','BBPT ID','Direct Copy'],['% Complete Hard Costs','% Complete Hard Costs','Direct Copy'],['Current Budget','Current Budget','Direct Copy'],['NOI Actual 2025','NOI Actual Current Yr','CASE WHEN Year Routing'],['NOI Budget 2025','NOI Budget Current Yr','CASE WHEN Year Routing']]},
+    {silver:'fact_investment_position',cols:[['Investment Name','Investment Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Street Address','Property Address','Denorm Join']]},
+  ],
+  gold_capital_stack:[
+    {silver:'fact_capital_stack',cols:[['Investment ID','Investment ID','Direct Copy'],['Tranche ID','Tranche ID','Direct Copy'],['Total Commitment','Total Commitment','Direct Copy'],['A Note Balance','A Note Balance','Direct Copy'],['Tranche LTV','Tranche LTV','Direct Copy'],['Cumulative LTV','Cumulative LTV','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join']]},
+  ],
+  gold_loan_history:[
+    {silver:'fact_loan_snapshot',cols:[['Loan ID','Loan ID','Full History'],['Snapshot Date','Snapshot Date','Full History'],['Current Balance','Current Balance','Direct Copy'],['Current LTV','Current LTV','Direct Copy'],['Current Rating','Current Rating','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'fact_operating_performance',cols:[['Occupancy %','Occupancy %','Latest Subquery'],['NOI','NOI','Latest Subquery']]},
+    {silver:'fact_valuation',cols:[['Appraised Value','Appraised Value','Latest Subquery']]},
+  ],
+  gold_payoff_history:[
+    {silver:'fact_payoff',cols:[['Payoff ID','Payoff ID','Direct Copy'],['Loan ID','Loan ID','Direct Copy'],['Payoff Amount','Payoff Amount','Direct Copy'],['Realized IRR','Realized IRR','Direct Copy'],['Gain Loss','Gain Loss','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join']]},
+  ],
+  gold_risk_exposure:[
+    {silver:'fact_loan_snapshot',cols:[['Investment ID','Investment ID','Direct Copy'],['Current Rating','Current Rating','Direct Copy'],['Prior Rating','Prior Rating','Direct Copy'],['Is Watchlist','Is Watchlist','Direct Copy'],['Delinquency Status','Delinquency Status','Direct Copy'],['Current LTV','Current LTV','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'fact_investment_position',cols:[['Investment Name','Investment Name','Denorm Join']]},
+  ],
+  gold_rate_reset_schedule:[
+    {silver:'fact_rate_schedule',cols:[['Schedule ID','Schedule ID','Direct Copy'],['Loan ID','Loan ID','Direct Copy'],['Period Start Date','Period Start Date','Full History'],['Spread','Spread','Direct Copy'],['All In Rate','All In Rate','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'fact_investment_position',cols:[['Investment Name','Investment Name','Denorm Join']]},
+  ],
+  gold_covenant_abstract:[
+    {silver:'fact_covenant_tracking',cols:[['Covenant ID','Covenant ID','Direct Copy'],['Investment ID','Investment ID','Direct Copy'],['Threshold Value','Threshold Value','Direct Copy'],['Actual Value','Actual Value','Direct Copy'],['Is Compliant','Is Compliant','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'fact_investment_position',cols:[['Investment Name','Investment Name','Denorm Join']]},
+  ],
+  gold_reserve_balances:[
+    {silver:'fact_reserve_balance',cols:[['Reserve ID','Reserve ID','Direct Copy'],['Investment ID','Investment ID','Direct Copy'],['Required Balance','Required Balance','Direct Copy'],['Current Balance','Current Balance','Direct Copy'],['Shortfall','Shortfall','Direct Copy'],['Is Compliant','Is Compliant','Direct Copy']]},
+  ],
+  gold_rate_cap_inventory:[
+    {silver:'fact_rate_cap',cols:[['Rate Cap ID','Rate Cap ID','Direct Copy'],['Investment ID','Investment ID','Direct Copy'],['Notional Amount','Notional Amount','Direct Copy'],['Strike Rate','Strike Rate','Direct Copy'],['Current Market Value','Current Market Value','Direct Copy'],['Is In The Money','Is In The Money','Direct Copy']]},
+  ],
+  gold_debt_facilities:[
+    {silver:'fact_debt_facility',cols:[['Facility ID','Facility ID','Direct Copy'],['Fund ID','Fund ID','Direct Copy'],['Facility Limit','Facility Limit','Direct Copy'],['Drawn Amount','Drawn Amount','Direct Copy'],['Available Capacity','Available Capacity','Direct Copy']]},
+    {silver:'dim_lender',cols:[['Lender Name','Lender Name','Denorm Join']]},
+  ],
+  gold_equity_investment:[
+    {silver:'fact_equity_snapshot',cols:[['Investment ID','Investment ID','Direct Copy'],['UW IRR','UW IRR','Direct Copy'],['RF IRR','RF IRR','Direct Copy'],['Current IRR','Current IRR','Direct Copy'],['Current NAV','Current NAV','Direct Copy'],['Distributions To Date','Distributions To Date','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join']]},
+    {silver:'dim_sponsor',cols:[['Sponsor Name','Sponsor Name','Denorm Join']]},
+  ],
+  gold_waterfall_summary:[
+    {silver:'dim_waterfall_structure',cols:[['Waterfall ID','Waterfall ID','Direct Copy'],['Waterfall Name','Waterfall Name','Direct Copy'],['Preferred Return %','Preferred Return %','Direct Copy']]},
+    {silver:'fact_waterfall_participant',cols:[['Participant Name','Participant Name','Direct Copy'],['Ownership %','Ownership %','Direct Copy']]},
+    {silver:'fact_waterfall_distribution',cols:[['Cumulative Distributions','Cumulative Distributions','Latest Subquery'],['IRR To Date','IRR To Date','Latest Subquery']]},
+    {silver:'fact_waterfall_projection',cols:[['Projected IRR','Projected IRR','Latest Subquery'],['Projected Multiple','Projected Multiple','Latest Subquery']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+  ],
+  gold_underwriting_comparison:[
+    {silver:'fact_equity_snapshot',cols:[['UW IRR','UW IRR','Direct Copy'],['RF IRR','RF IRR','Direct Copy'],['UW NOI','UW NOI','Direct Copy'],['Current NOI','Current NOI','Direct Copy']]},
+    {silver:'fact_investment_position',cols:[['Investment ID','Investment ID','Direct Copy'],['Investment Name','Investment Name','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_waterfall_structure',cols:[['UW Hold Period','UW Hold Period','Direct Copy']]},
+  ],
+  gold_operating_performance:[
+    {silver:'fact_operating_performance',cols:[['Property ID','Property ID','Direct Copy'],['Gross Potential Rent','Gross Potential Rent','Direct Copy'],['NOI','NOI','Direct Copy'],['Occupancy %','Occupancy %','Direct Copy'],['UW NOI','UW NOI','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join']]},
+  ],
+  gold_rent_roll_summary:[
+    {silver:'fact_rent_roll',cols:[['Property ID','Property ID','GROUP BY Agg'],['Base Rent','Total Base Rent','Aggregation'],['Market Rent','Total Market Rent','Aggregation'],['Occupancy %','Occupancy %','GROUP BY Agg'],['Concession Amount','Total Concessions','Aggregation']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join']]},
+  ],
+  gold_financial_performance:[
+    {silver:'fact_financial_statement',cols:[['Actual Amount','Total Revenue','GL Agg SUM+WHERE'],['Actual Amount','Total Operating Expenses','GL Agg SUM+WHERE'],['Budget Amount','Budget NOI','GL Agg SUM+WHERE'],['Prior Year Amount','Prior Year NOI','GL Agg SUM+WHERE']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join']]},
+  ],
+  gold_lease_expiration_schedule:[
+    {silver:'fact_lease_expiration',cols:[['Property ID','Property ID','Full History'],['Expiration Year','Expiration Year','Direct Copy'],['Expiring SF','Expiring SF','Direct Copy'],['Market Rent PSF','Market Rent PSF','Direct Copy'],['Mark To Market %','Mark To Market %','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'dim_property',cols:[['Property Name','Property Name','Denorm Join']]},
+  ],
+  gold_commentary_history:[
+    {silver:'fact_commentary',cols:[['Commentary ID','Commentary ID','Full History'],['Commentary Text','Commentary Text','Direct Copy'],['Review Status','Review Status','Direct Copy'],['Is Current Version','Is Current Version','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+    {silver:'fact_investment_position',cols:[['Investment Name','Investment Name','Denorm Join']]},
+  ],
+  gold_security_portfolio:[
+    {silver:'fact_security_position',cols:[['Security ID','Security ID','Direct Copy'],['Market Value','Market Value','Direct Copy'],['Cost Basis','Cost Basis','Direct Copy'],['Unrealized Gain Loss','Unrealized Gain Loss','Direct Copy'],['Rating Moodys','Rating Moodys','Direct Copy'],['Current Rating','Current Rating','Direct Copy']]},
+    {silver:'dim_fund',cols:[['Fund Name','Fund Name','Denorm Join']]},
+  ],
+  gold_current_state_build:[
+    {silver:'fact_investment_position',cols:[['Investment ID','Investment ID','ETL Metadata'],['Source Table','Source Table','ETL Metadata'],['Build Timestamp','Build Timestamp','ETL Metadata']]},
+  ],
+  gold_flash_report_build:[
+    {silver:'fact_flash_narrative',cols:[['Investment ID','Investment ID','ETL Metadata'],['Report Date','Report Date','ETL Metadata'],['Build Timestamp','Build Timestamp','ETL Metadata']]},
+  ],
+};
+
+// ─── GOLD EDGES ──────────────────────────────
+const EDGES=[
+  ["gold_loan_current_state","gold_loan_history","loan_id","Time Series"],
+  ["gold_loan_current_state","gold_payoff_history","loan_id","Realized Exits"],
+  ["gold_loan_current_state","gold_rate_reset_schedule","loan_id","Rate Schedule"],
+  ["gold_loan_current_state","gold_loan_activity","loan_id","Transaction Log"],
+  ["gold_loan_current_state","gold_rate_cap_inventory","loan_id","Rate Caps"],
+  ["gold_loan_current_state","gold_debt_facilities","fund_id","Debt Facilities"],
+  ["gold_investment_current_state","gold_flash_report","investment_id","Flash Report"],
+  ["gold_investment_current_state","gold_capital_stack","investment_id","Capital Stack"],
+  ["gold_investment_current_state","gold_maturity_schedule","investment_id","Maturity"],
+  ["gold_investment_current_state","gold_risk_exposure","investment_id","Risk / Watchlist"],
+  ["gold_investment_current_state","gold_covenant_abstract","investment_id","Covenants"],
+  ["gold_investment_current_state","gold_reserve_balances","investment_id","Reserves"],
+  ["gold_investment_current_state","gold_equity_investment","investment_id","Equity Returns"],
+  ["gold_investment_current_state","gold_waterfall_summary","investment_id","Waterfall"],
+  ["gold_investment_current_state","gold_underwriting_comparison","investment_id","UW vs Actual"],
+  ["gold_investment_current_state","gold_bbpt_summary","investment_id","Business Plan"],
+  ["gold_investment_current_state","gold_commentary_history","investment_id","Commentary"],
+  ["gold_investment_current_state","gold_operating_performance","property_id","Property Ops"],
+  ["gold_investment_current_state","gold_rent_roll_summary","property_id","Rent Roll"],
+  ["gold_investment_current_state","gold_financial_performance","property_id","Financials"],
+  ["gold_investment_current_state","gold_lease_expiration_schedule","property_id","Lease Expiry"],
+  ["gold_investment_current_state","gold_portfolio_summary","fund_id","Portfolio Rollup"],
+  ["gold_investment_current_state","gold_security_portfolio","fund_id","Securities"],
+  ["gold_investment_current_state","gold_current_state_build","investment_id","Audit Trail"],
+  ["gold_flash_report","gold_flash_report_build","investment_id","Audit Trail"],
+];
+
+// ─── LAYOUT ──────────────────────────────────
+const NW=190;
+const GOLD_POS={
+  gold_investment_current_state:{x:600,y:540},
+  gold_loan_current_state:{x:860,y:540},
+  gold_flash_report:{x:60,y:100},
+  gold_capital_stack:{x:280,y:100},
+  gold_loan_history:{x:500,y:100},
+  gold_payoff_history:{x:720,y:100},
+  gold_risk_exposure:{x:940,y:100},
+  gold_covenant_abstract:{x:1160,y:100},
+  gold_reserve_balances:{x:1380,y:100},
+  gold_rate_reset_schedule:{x:60,y:360},
+  gold_rate_cap_inventory:{x:280,y:360},
+  gold_debt_facilities:{x:60,y:600},
+  gold_maturity_schedule:{x:280,y:600},
+  gold_equity_investment:{x:1160,y:370},
+  gold_waterfall_summary:{x:1380,y:370},
+  gold_portfolio_summary:{x:1160,y:590},
+  gold_underwriting_comparison:{x:1380,y:590},
+  gold_bbpt_summary:{x:1160,y:820},
+  gold_operating_performance:{x:1380,y:820},
+  gold_rent_roll_summary:{x:1160,y:1040},
+  gold_lease_expiration_schedule:{x:1380,y:1040},
+  gold_financial_performance:{x:1160,y:1250},
+  gold_commentary_history:{x:60,y:850},
+  gold_loan_activity:{x:280,y:850},
+  gold_security_portfolio:{x:500,y:850},
+  gold_current_state_build:{x:720,y:850},
+  gold_flash_report_build:{x:720,y:1060},
+};
+
+// Silver node positions: clustered left of canvas
+const SILVER_POS={
+  dim_fund:{x:-340,y:80},
+  dim_property:{x:-340,y:200},
+  dim_sponsor:{x:-340,y:320},
+  dim_lender:{x:-340,y:440},
+  dim_loan_type:{x:-340,y:560},
+  dim_waterfall_structure:{x:-340,y:680},
+  fact_investment_position:{x:-600,y:80},
+  fact_loan_snapshot:{x:-600,y:220},
+  fact_operating_performance:{x:-600,y:360},
+  fact_valuation:{x:-600,y:480},
+  fact_flash_narrative:{x:-600,y:600},
+  fact_capital_stack:{x:-600,y:720},
+  fact_payoff:{x:-600,y:840},
+  fact_covenant_tracking:{x:-600,y:960},
+  fact_reserve_balance:{x:-600,y:1080},
+  fact_rate_schedule:{x:-600,y:1200},
+  fact_rate_cap:{x:-860,y:80},
+  fact_debt_facility:{x:-860,y:220},
+  fact_equity_snapshot:{x:-860,y:360},
+  fact_waterfall_distribution:{x:-860,y:480},
+  fact_waterfall_participant:{x:-860,y:600},
+  fact_waterfall_projection:{x:-860,y:720},
+  fact_bbpt_tracker:{x:-860,y:840},
+  fact_rent_roll:{x:-860,y:960},
+  fact_financial_statement:{x:-860,y:1080},
+  fact_lease_expiration:{x:-860,y:1200},
+  fact_commentary:{x:-860,y:1320},
+  fact_security_position:{x:-860,y:1440},
+};
+
+// ─── BUILD GOLD NODES ─────────────────────────
+const cv=document.getElementById('cv');
+const nodeEls={};
+const MAX_FIELDS=7;
+function fmtField(n){return n.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase()).replace(/\bId\b/g,'ID').replace(/\bLtv\b/g,'LTV').replace(/\bDscr\b/g,'DSCR').replace(/\bNoi\b/g,'NOI').replace(/\bIrr\b/g,'IRR').replace(/\bMoc\b/g,'MOC').replace(/\bNcf\b/g,'NCF').replace(/\bPik\b/g,'PIK').replace(/\bAm\b/g,'AM').replace(/\bEtl\b/g,'ETL').replace(/\bUw\b/g,'UW').replace(/\bRf\b/g,'RF').replace(/\bYoy\b/g,'YoY').replace(/\bPsf\b/g,'PSF').replace(/\bPct\b/g,'%').replace(/\bWtd\b/g,'Wtd.').replace(/\bAvg\b/g,'Avg.').replace(/\bCusip\b/g,'CUSIP').replace(/\bFk\b/g,'FK').replace(/\bPk\b/g,'PK').replace(/\bSf\b/g,'SF').replace(/\bCpr\b/g,'CPR').replace(/\bCdr\b/g,'CDR').replace(/\bFico\b/g,'FICO').replace(/\bCltv\b/g,'CLTV').replace(/\bNav\b/g,'NAV').replace(/\bGl\b/g,'GL').replace(/\bCre\b/g,'CRE').replace(/\bUPB\b/g,'UPB').replace(/\bBbpt\b/g,'BBPT').replace(/\bCmbs\b/g,'CMBS').replace(/\bRmbs\b/g,'RMBS').replace(/\bClo\b/g,'CLO').replace(/\bJv\b/g,'JV').replace(/\bLp\b/g,'LP').replace(/\bGp\b/g,'GP').replace(/\bIo\b/g,'IO').replace(/\bWa\b/g,'WA').replace(/\bYtm\b/g,'YTM');}
+
+Object.entries(TABLES).forEach(([tname,td])=>{
+  const p=GOLD_POS[tname]; if(!p) return;
+  const ds=DOM[td.dom];
+  const isHub=td.dom==='hub';
+  const el=document.createElement('div');
+  el.className='node'+(isHub?' hub':'');
+  el.id='n-'+tname; el.dataset.t=tname; el.dataset.layer='gold';
+  el.style.cssText=`left:${p.x}px;top:${p.y}px;width:${NW}px;border-color:${ds.border};`;
+  const visF=td.cols.slice(0,MAX_FIELDS), more=td.cols.length-MAX_FIELDS;
+  const fRows=visF.map(f=>{
+    const icon=f.k==='PK'?'🔑':f.k==='FK'?'🔗':f.k==='NOT NULL'?'•':'';
+    const col=f.k==='PK'?'style="color:#b87c1a"':f.k==='FK'?'style="color:#3b82f6"':'';
+    return`<div class="n-field"><span class="fkey">${icon}</span><span class="fname" ${col}>${fmtField(f.n)}</span><span class="ftype">${f.t}</span></div>`;
+  }).join('');
+  el.innerHTML=`
+    <div class="n-head" id="head-${tname}" style="background:${ds.bg}">
+      <span class="n-icon">${ds.icon}</span>
+      <div class="n-meta">
+        <div class="n-domain" style="color:${ds.color}">${ds.label}</div>
+        <div class="n-label" style="color:${ds.tc}">${td.short.replace(/\n/g,'<br>')}</div>
+      </div>
+      <span class="n-cols-badge" style="color:${ds.color};background:${ds.bg};border:1px solid ${ds.border}">${td.cols.length}+ fields</span>
+      <span class="n-toggle" id="tog-${tname}" onclick="toggleNode('${tname}',event)">▾</span>
+    </div>
+    <div class="n-fields" id="fields-${tname}">
+      <div class="n-fields-inner">${fRows}${more>0?`<div class="n-more" onclick="openDP('${tname}');event.stopPropagation()">+${more} more fields →</div>`:''}</div>
+    </div>`;
+  el.addEventListener('click',()=>openDP(tname));
+  cv.appendChild(el);
+  nodeEls[tname]=el;
+});
+
+// ─── BUILD SILVER NODES ───────────────────────
+const silverEls={};
+Object.entries(SILVER).forEach(([sname,sd])=>{
+  const p=SILVER_POS[sname]; if(!p) return;
+  const el=document.createElement('div');
+  el.className='snode';
+  el.id='s-'+sname; el.dataset.t=sname; el.dataset.layer='silver';
+  el.style.cssText=`left:${p.x}px;top:${p.y}px;width:200px;`;
+  const feedChips=sd.feeds.slice(0,3).map(g=>`<span class="s-gold-chip">${g.replace('gold_','')}</span>`).join('');
+  const moreFeeds=sd.feeds.length>3?`<span class="s-gold-chip">+${sd.feeds.length-3}</span>`:'';
+  el.innerHTML=`
+    <div class="s-head">
+      <span class="s-type-badge ${sd.type}">${sd.type.toUpperCase()}</span>
+      <span class="s-label">${sname}</span>
+      <span class="s-sys">${sd.sys.split('/')[0]}</span>
+    </div>
+    <div class="s-gold-feeds">${feedChips}${moreFeeds}</div>`;
+  el.addEventListener('click',()=>openSilverDP(sname));
+  cv.appendChild(el);
+  silverEls[sname]=el;
+});
+
+// ─── EDGES ────────────────────────────────────
+const svg=document.getElementById('edgesvg');
+const TIP=document.getElementById('tip');
+
+function eColor(fk){
+  if(fk==='property_id') return '#10b981';
+  if(fk==='fund_id') return '#b87c1a';
+  return '#94a3b8';
+}
+function eMarker(fk){
+  if(fk==='property_id') return 'g';
+  if(fk==='fund_id') return 'o';
+  return 's';
+}
+
+function nc(t,layer='gold'){
+  const p=layer==='gold'?GOLD_POS[t]:SILVER_POS[t];
+  const el=layer==='gold'?nodeEls[t]:silverEls[t];
+  if(!p||!el) return null;
+  return{x:p.x+el.offsetWidth/2,y:p.y+el.offsetHeight/2,w:el.offsetWidth,h:el.offsetHeight};
+}
+
+let curF='all', curLayer='gold';
+
+function drawEdges(filter='all'){
+  svg.innerHTML=`<defs>
+    <marker id="ms" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto"><polygon points="0 0,8 3.5,0 7" fill="#94a3b8"/></marker>
+    <marker id="mg" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto"><polygon points="0 0,8 3.5,0 7" fill="#10b981"/></marker>
+    <marker id="mo" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto"><polygon points="0 0,8 3.5,0 7" fill="#b87c1a"/></marker>
+    <marker id="msi" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto"><polygon points="0 0,8 3.5,0 7" fill="#7c3aed" opacity="0.7"/></marker>
+  </defs>`;
+
+  // Gold→Gold edges
+  EDGES.forEach(([src,tgt,fk,label],i)=>{
+    const s=nc(src),t=nc(tgt); if(!s||!t) return;
+    const sd=TABLES[src]?.dom||'', td=TABLES[tgt]?.dom||'';
+    if(filter==='debt' && !['hub','debt'].includes(sd) && !['hub','debt'].includes(td)) return;
+    if(filter==='equity' && !['hub','eq'].includes(sd) && !['hub','eq'].includes(td)) return;
+    if(filter==='reporting' && !['hub','rep','etl'].includes(sd) && !['hub','rep','etl'].includes(td)) return;
+    const dx=t.x-s.x,dy=t.y-s.y,dist=Math.sqrt(dx*dx+dy*dy);
+    const ux=dx/dist,uy=dy/dist;
+    const x1=s.x+ux*(s.w/2+2),y1=s.y+uy*(s.h/2+2);
+    const x2=t.x-ux*(t.w/2+9),y2=t.y-uy*(t.h/2+9);
+    const off=26*(i%2===0?1:-1);
+    const c=eColor(fk);
+    const isDash=label.includes('Audit');
+    const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d',`M${x1},${y1} Q${(x1+x2)/2+uy*off},${(y1+y2)/2-ux*off} ${x2},${y2}`);
+    path.setAttribute('class','edge');
+    path.setAttribute('stroke',c);
+    path.setAttribute('stroke-opacity','0.5');
+    path.setAttribute('marker-end',`url(#m${eMarker(fk)})`);
+    if(isDash) path.setAttribute('stroke-dasharray','7,4');
+    path.dataset.src=src; path.dataset.tgt=tgt;
+    path.style.pointerEvents='stroke';
+    path.addEventListener('mouseenter',()=>{TIP.textContent=`${src.replace('gold_','')} → ${tgt.replace('gold_','')} · ${label}`;TIP.classList.add('show');});
+    path.addEventListener('mousemove',e=>{TIP.style.left=(e.clientX+14)+'px';TIP.style.top=(e.clientY-30)+'px';});
+    path.addEventListener('mouseleave',()=>TIP.classList.remove('show'));
+    svg.appendChild(path);
+    const mx=(x1+x2)/2+uy*off,my=(y1+y2)/2-ux*off;
+    const lw=label.length*5.5+10;
+    const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    bg.setAttribute('x',mx-lw/2);bg.setAttribute('y',my-8);bg.setAttribute('width',lw);bg.setAttribute('height',13);bg.setAttribute('rx',3);bg.setAttribute('fill','#f0f2f7');bg.setAttribute('opacity','0.92');
+    svg.appendChild(bg);
+    const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+    txt.setAttribute('x',mx);txt.setAttribute('y',my+2.5);txt.setAttribute('text-anchor','middle');
+    txt.setAttribute('class','elbl');txt.setAttribute('fill',c);txt.setAttribute('opacity','0.85');
+    txt.textContent=label;
+    svg.appendChild(txt);
+  });
+
+  // Silver→Gold edges (only in 'both' layer mode)
+  if(curLayer==='both'){
+    Object.entries(SILVER).forEach(([sname,sd])=>{
+      const sel=silverEls[sname]; if(!sel||!sel.classList.contains('visible')) return;
+      const sp=SILVER_POS[sname]; if(!sp) return;
+      const sx=sp.x+sel.offsetWidth,sy=sp.y+sel.offsetHeight/2;
+      sd.feeds.forEach(gname=>{
+        const gp=GOLD_POS[gname]; const gel=nodeEls[gname]; if(!gp||!gel) return;
+        const gx=gp.x,gy=gp.y+gel.offsetHeight/2;
+        const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+        path.setAttribute('d',`M${sx},${sy} C${sx+80},${sy} ${gx-80},${gy} ${gx},${gy}`);
+        path.setAttribute('class','sedge visible');
+        path.setAttribute('stroke','#7c3aed');
+        path.setAttribute('stroke-opacity','0.35');
+        path.setAttribute('marker-end','url(#msi)');
+        path.dataset.src=sname; path.dataset.tgt=gname;
+        path.style.pointerEvents='stroke';
+        path.addEventListener('mouseenter',()=>{TIP.textContent=`${sname} → ${gname.replace('gold_','')}`;TIP.classList.add('show');});
+        path.addEventListener('mousemove',e=>{TIP.style.left=(e.clientX+14)+'px';TIP.style.top=(e.clientY-30)+'px';});
+        path.addEventListener('mouseleave',()=>TIP.classList.remove('show'));
+        svg.appendChild(path);
+      });
+    });
+  }
+}
+
+// ─── LAYER TOGGLE ─────────────────────────────
+function setLayer(mode, btn){
+  curLayer=mode;
+  document.querySelectorAll('.ltbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const showSilver=mode==='both';
+  Object.values(silverEls).forEach(el=>{
+    el.classList.toggle('visible', showSilver);
+  });
+  closeDP();
+  setTimeout(()=>drawEdges(curF),20);
+}
+
+// ─── COLLAPSE / EXPAND ────────────────────────
+const collapsedNodes=new Set();
+function toggleNode(tname,e){
+  e.stopPropagation();
+  const fieldsEl=document.getElementById('fields-'+tname);
+  const togEl=document.getElementById('tog-'+tname);
+  const headEl=document.getElementById('head-'+tname);
+  if(collapsedNodes.has(tname)){
+    collapsedNodes.delete(tname);
+    fieldsEl.style.maxHeight=fieldsEl.scrollHeight+'px';
+    setTimeout(()=>{fieldsEl.style.maxHeight='';drawEdges(curF);},260);
+    togEl.textContent='▾'; headEl.classList.remove('collapsed');
+  } else {
+    collapsedNodes.add(tname);
+    fieldsEl.style.maxHeight=fieldsEl.scrollHeight+'px';
+    requestAnimationFrame(()=>{fieldsEl.style.maxHeight='0';});
+    setTimeout(()=>drawEdges(curF),260);
+    togEl.textContent='▸'; headEl.classList.add('collapsed');
+  }
+}
+function collapseAll(){Object.keys(TABLES).forEach(t=>{if(!collapsedNodes.has(t)){const el=document.getElementById('fields-'+t);const tog=document.getElementById('tog-'+t);const hd=document.getElementById('head-'+t);if(!el)return;collapsedNodes.add(t);el.style.maxHeight=el.scrollHeight+'px';requestAnimationFrame(()=>{el.style.maxHeight='0';});if(tog)tog.textContent='▸';if(hd)hd.classList.add('collapsed');}});setTimeout(()=>drawEdges(curF),280);}
+function expandAll(){Object.keys(TABLES).forEach(t=>{if(collapsedNodes.has(t)){const el=document.getElementById('fields-'+t);const tog=document.getElementById('tog-'+t);const hd=document.getElementById('head-'+t);if(!el)return;collapsedNodes.delete(t);el.style.maxHeight=el.scrollHeight+'px';setTimeout(()=>{el.style.maxHeight='';drawEdges(curF);},260);if(tog)tog.textContent='▾';if(hd)hd.classList.remove('collapsed');}});}
+
+// ─── DETAIL PANEL — GOLD ──────────────────────
+let activeN=null;
+function openDP(tname){
+  const td=TABLES[tname]; if(!td) return;
+  activeN=tname;
+  const ds=DOM[td.dom];
+  document.getElementById('dh-icon').textContent=ds.icon;
+  document.getElementById('dh-domain').textContent=ds.label;
+  document.getElementById('dh-domain').style.color=ds.color;
+  document.getElementById('dh-title').textContent=td.short.replace(/\n/g,' ');
+  document.getElementById('dh-sub').textContent=tname;
+  document.getElementById('d-desc').textContent=td.desc;
+  document.getElementById('d-stats').innerHTML=`
+    <div class="d-stat"><label>Refresh</label><div class="sv">${td.refresh}</div></div>
+    <div class="d-stat"><label>Domain</label><div class="sv" style="color:${ds.color}">${ds.label}</div></div>
+    <div class="d-stat" style="grid-column:1/-1"><label>Used For</label><div class="sv" style="font-size:11px;font-weight:500;color:#374151">${td.usedFor}</div></div>
+    <div class="d-stat" style="grid-column:1/-1"><label>ETL Pattern</label><div class="sv" style="font-size:11px;font-weight:500;color:#374151">${td.etlPattern}</div></div>`;
+
+  // Silver lineage
+  const lineage=S2G_LINEAGE[tname]||[];
+  const silSec=document.getElementById('silver-lineage-section');
+  if(lineage.length){
+    silSec.style.display='';
+    document.getElementById('d-silver').innerHTML=lineage.map(grp=>{
+      const sd=SILVER[grp.silver];
+      const typ=sd?.type||'fact';
+      const sys=sd?.sys||'';
+      const cols=grp.cols.map(([sc,gc,tr])=>`
+        <div class="stbl-col">
+          <span class="scol-name">${sc}</span>
+          <span class="scol-arrow">→</span>
+          <span class="gcol-name">${gc}</span>
+          <span class="transform-badge">${tr}</span>
+        </div>`).join('');
+      return`<div class="stbl-group">
+        <div class="stbl-name">
+          <span class="stbl-badge ${typ}">${typ.toUpperCase()}</span>
+          ${grp.silver}
+          <span class="stbl-sys">${sys}</span>
+        </div>
+        <div class="stbl-cols">${cols}</div>
+      </div>`;
+    }).join('');
+  } else {
+    silSec.style.display='none';
+  }
+
+  document.getElementById('d-fields').innerHTML=td.cols.map(f=>{
+    const badge=f.k==='PK'?'<span class="df-badge pk">PK</span>':f.k==='FK'?'<span class="df-badge fk">FK</span>':'<span style="width:26px;display:inline-block"></span>';
+    return`<div class="d-field">${badge}<span class="df-name">${fmtField(f.n)}</span><span class="df-type">${f.t}</span></div>`;
+  }).join('');
+  document.getElementById('d-sources').innerHTML=td.sources.map(s=>`<span class="src-chip">${s}</span>`).join('');
+  const out=EDGES.filter(e=>e[0]===tname).map(([,t,,l])=>({dir:'out',t,l}));
+  const inn=EDGES.filter(e=>e[1]===tname).map(([s,,,l])=>({dir:'in',t:s,l}));
+  document.getElementById('d-rels').innerHTML=[...inn,...out].map(r=>`
+    <div class="rel-item" onclick="openDP('${r.t}')">
+      <div class="rel-dir">${r.dir==='out'?'→ Feeds into':'← Draws from'}</div>
+      <div class="rel-name">${TABLES[r.t]?.short.replace(/\n/g,' ')||r.t}</div>
+      <div class="rel-via">via <strong>${r.l}</strong></div>
+    </div>`).join('')||'<div style="color:#8a95a8;font-size:12px;padding:4px 0">No direct relationships</div>';
+
+  document.getElementById('dp').classList.add('open');
+  const conn=new Set([tname]);
+  EDGES.forEach(([s,t])=>{if(s===tname||t===tname){conn.add(s);conn.add(t);}});
+  Object.values(nodeEls).forEach(el=>{el.classList.toggle('selected',el.dataset.t===tname);el.classList.toggle('faded',!conn.has(el.dataset.t));});
+  Object.values(silverEls).forEach(el=>el.classList.remove('selected','faded'));
+  // Highlight silver tables that feed this gold table
+  if(curLayer==='both'){
+    const feedingS=new Set(lineage.map(g=>g.silver));
+    Object.entries(silverEls).forEach(([sn,el])=>{el.classList.toggle('faded',!feedingS.has(sn));el.classList.toggle('selected',feedingS.has(sn));});
+  }
+  svg.querySelectorAll('.edge').forEach(e=>{const c=conn.has(e.dataset.src)&&conn.has(e.dataset.tgt);e.classList.toggle('faded',!c);e.classList.toggle('hi',c);});
+  svg.querySelectorAll('.sedge').forEach(e=>{const hi=e.dataset.tgt===tname;e.classList.toggle('faded',!hi);e.classList.toggle('hi',hi);});
+}
+
+function openSilverDP(sname){
+  const sd=SILVER[sname]; if(!sd) return;
+  document.getElementById('dh-icon').textContent=sd.type==='dim'?'◻':'◈';
+  document.getElementById('dh-domain').textContent='Silver · '+sd.type.toUpperCase();
+  document.getElementById('dh-domain').style.color=sd.type==='dim'?'#7c3aed':'#3b82f6';
+  document.getElementById('dh-title').textContent=sname;
+  document.getElementById('dh-sub').textContent='Source: '+sd.sys;
+  document.getElementById('d-desc').textContent=`${sd.type==='dim'?'Dimension':'Fact'} table from ${sd.sys}. Feeds into ${sd.feeds.length} gold table${sd.feeds.length>1?'s':''}.`;
+  document.getElementById('d-stats').innerHTML=`
+    <div class="d-stat"><label>Type</label><div class="sv">${sd.type==='dim'?'Dimension':'Fact'}</div></div>
+    <div class="d-stat"><label>Source System</label><div class="sv">${sd.sys}</div></div>
+    <div class="d-stat" style="grid-column:1/-1"><label>Gold Tables Fed (${sd.feeds.length})</label><div class="sv" style="font-size:10px;font-weight:500;color:#374151">${sd.feeds.map(g=>g.replace('gold_','')).join(' · ')}</div></div>`;
+  document.getElementById('silver-lineage-section').style.display='none';
+  document.getElementById('d-fields').innerHTML='<div style="color:#8a95a8;font-size:12px">Select a gold table to see column-level mapping</div>';
+  document.getElementById('d-sources').innerHTML=`<span class="src-chip">${sd.sys}</span>`;
+  document.getElementById('d-rels').innerHTML=sd.feeds.map(g=>`
+    <div class="rel-item" onclick="openDP('${g}')">
+      <div class="rel-dir">→ Feeds into</div>
+      <div class="rel-name">${TABLES[g]?.short.replace(/\n/g,' ')||g}</div>
+      <div class="rel-via">via <strong>Silver→Gold pipeline</strong></div>
+    </div>`).join('');
+  document.getElementById('dp').classList.add('open');
+  Object.values(nodeEls).forEach(el=>el.classList.toggle('faded',!sd.feeds.includes(el.dataset.t)));
+  Object.values(silverEls).forEach(el=>{el.classList.toggle('selected',el.dataset.t===sname);el.classList.toggle('faded',el.dataset.t!==sname);});
+  svg.querySelectorAll('.edge').forEach(e=>e.classList.add('faded'));
+  svg.querySelectorAll('.sedge').forEach(e=>{const hi=e.dataset.src===sname;e.classList.toggle('faded',!hi);e.classList.toggle('hi',hi);});
+}
+
+function closeDP(){
+  document.getElementById('dp').classList.remove('open');
+  activeN=null;
+  Object.values(nodeEls).forEach(el=>el.classList.remove('selected','faded'));
+  Object.values(silverEls).forEach(el=>el.classList.remove('selected','faded'));
+  svg.querySelectorAll('.edge,.sedge').forEach(e=>e.classList.remove('faded','hi'));
+}
+
+// ─── FILTER ──────────────────────────────────
+function setFilter(f,btn){
+  curF=f;
+  document.querySelectorAll('.fbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  const map={debt:['hub','debt'],equity:['hub','eq'],reporting:['hub','rep','etl']};
+  const ok=map[f]||null;
+  Object.entries(nodeEls).forEach(([t,el])=>{el.style.display=(!ok||ok.includes(TABLES[t]?.dom))?'':'none';});
+  closeDP();
+  setTimeout(()=>drawEdges(f),20);
+}
+
+// ─── PAN & ZOOM ──────────────────────────────
+let scale=1,tx=0,ty=0,drag=false,lx=0,ly=0;
+function applyT(){cv.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;document.getElementById('zlbl').textContent=Math.round(scale*100)+'%';}
+const vp=document.getElementById('vp');
+vp.addEventListener('mousedown',e=>{if(e.target.closest('.node,.snode')) return;drag=true;lx=e.clientX;ly=e.clientY;vp.classList.add('pan');});
+window.addEventListener('mousemove',e=>{if(!drag) return;tx+=e.clientX-lx;ty+=e.clientY-ly;lx=e.clientX;ly=e.clientY;applyT();});
+window.addEventListener('mouseup',()=>{drag=false;vp.classList.remove('pan');});
+vp.addEventListener('wheel',e=>{e.preventDefault();zoomAt(e.deltaY<0?1.1:0.91,e.clientX,e.clientY);},{passive:false});
+function zoomAt(f,cx,cy){const ns=Math.max(0.15,Math.min(3,scale*f)),r=ns/scale;tx=cx-r*(cx-tx);ty=cy-r*(cy-ty);scale=ns;applyT();}
+function zoomBy(f){const vr=vp.getBoundingClientRect();zoomAt(f,vr.left+vr.width/2,vr.top+vr.height/2);}
+
+function resetView(){
+  const vw=vp.offsetWidth,vh=vp.offsetHeight;
+  const xs=Object.values(GOLD_POS).map(p=>p.x);
+  const ys=Object.values(GOLD_POS).map(p=>p.y);
+  const minX=Math.min(...xs)-20,minY=Math.min(...ys)-20;
+  const maxX=Math.max(...xs)+NW+20,maxY=Math.max(...ys)+340;
+  const cw=maxX-minX,ch=maxY-minY;
+  scale=Math.min(0.95,Math.min(vw/cw,vh/ch))*0.9;
+  tx=(vw-cw*scale)/2-minX*scale;
+  ty=(vh-ch*scale)/2-minY*scale;
+  applyT();
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='Escape') closeDP();if(e.key==='0') resetView();});
+setTimeout(()=>{drawEdges('all');resetView();},150);
+window.addEventListener('resize',()=>{drawEdges(curF);resetView();});
+</script>
+</body>
+</html>
